@@ -3,15 +3,14 @@ use v5.14;
 use Moose::Role;
 
 use constant PACKET_METHOD_MAP => {
-    'RequestStartupMessage' => '_packet_request_startup',
+    'StartupRequest' => '_packet_request_startup',
     'RadioTrims'            => '_packet_radio_trims',
-    'RadioMins'             => '_packet_radio_mins',
-    'RadioMaxes'            => '_packet_radio_maxes',
+    'RadioMinMax'           => '_packet_radio_min_max',
     'RadioOutputs'          => '_packet_radio_out',
 };
 my @REQUIRED_PACKET_METHODS = grep {
     $_ !~ /\A (?:
-        _packet_radio_mins | _packet_radio_maxes
+        _packet_radio_min_max
     ) \z/x
 } values %{ +PACKET_METHOD_MAP };
 
@@ -54,15 +53,19 @@ sub process_packet
     return $self->$method( $packet, $server );
 }
 
-sub _packet_radio_mins
+sub _packet_radio_min_max
 {
     my ($self, $packet, $server) = @_;
     foreach (1..8) {
-        my $packet_call = 'ch' . $_ . '_min';
-        my $server_call = '_set_ch' . $_ . '_min';
+        my $packet_min_call = 'ch' . $_ . '_min';
+        my $server_min_call = '_set_ch' . $_ . '_min';
+        my $packet_max_call = 'ch' . $_ . '_max';
+        my $server_max_call = '_set_ch' . $_ . '_max';
 
-        my $value = $packet->$packet_call // 0;
-        $server->$server_call( $value );
+        my $min_value = $packet->$packet_min_call // 0;
+        $server->$server_min_call( $min_value );
+        my $max_value = $packet->$packet_max_call // 0;
+        $server->$server_max_call( $max_value );
     }
     return 1;
 }

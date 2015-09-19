@@ -158,12 +158,12 @@ sub process_packet
 
     if(! $backend->started) {
         if( $packet->isa(
-            'UAV::Pilot::Wumpus::Packet::RequestStartupMessage' )) {
+            'UAV::Pilot::Wumpus::Packet::StartupRequest' )) {
             $process->();
         }
         else {
             $self->_logger->warn( 'Recieved packet of type "' . ref( $packet )
-                . '", but we need a RequestStartupMessage first' );
+                . '", but we need a StartupRequest first' );
         }
     }
     else {
@@ -241,9 +241,7 @@ sub _build_ack_packet
     my ($self, $packet) = @_;
 
     my $ack = UAV::Pilot::Wumpus::PacketFactory->fresh_packet( 'Ack' );
-    $ack->message_received_id( $packet->message_id );
-    $ack->checksum_received1( $packet->checksum1 );
-    $ack->checksum_received2( $packet->checksum2 );
+    $ack->checksum_received( $packet->checksum );
 
     return $ack;
 }
