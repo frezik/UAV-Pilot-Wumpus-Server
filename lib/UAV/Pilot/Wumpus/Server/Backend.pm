@@ -159,7 +159,7 @@ radio trims.
 
 =head2 _packet_radio_out
 
-    _packet_request_out( $packet, $server )
+    _packet_radio_out( $packet, $server )
 
 Passed a packet and the server associated with the connection.  Handles the 
 radio outputs, which is the primary way of moving.

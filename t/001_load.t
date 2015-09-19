@@ -1,9 +1,10 @@
-use Test::More tests => 3;
+use Test::More tests => 4;
 use v5.14;
 use warnings;
 
 use_ok( 'UAV::Pilot::Wumpus::Server' );
 use_ok( 'UAV::Pilot::Wumpus::Server::Backend' );
+use_ok( 'UAV::Pilot::Wumpus::Server::Backend::Logger' );
 
 eval "use HiPi::BCM2835::I2C";
 SKIP: {
