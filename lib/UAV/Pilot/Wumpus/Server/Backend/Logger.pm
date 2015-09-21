@@ -36,6 +36,7 @@ sub _packet_request_startup
 {
     my ($self, $packet, $server) = @_;
     say "Requested startup";
+    $self->_set_started( 1 );
     return 1;
 }
 
