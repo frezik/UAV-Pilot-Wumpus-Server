@@ -34,6 +34,8 @@ my $HEIGHT = 600;
 my $PORT   = UAV::Pilot::Wumpus->DEFAULT_VIDEO_PORT;
 my $TYPE   = 'rpi';
 my $FPS = 30;
+my $BITRATE = 0;
+my $VBR_QUANT = 15;
 Getopt::Long::GetOptions(
     #'input=s'  => \$INPUT_DEV,
     'w|width=i'  => \$WIDTH,
@@ -41,6 +43,8 @@ Getopt::Long::GetOptions(
     'p|port=i'   => \$PORT,
     't|type=s'   => \$TYPE,
     'f|fps=i' => \$FPS,
+    'b|bitrate=i' => \$BITRATE,
+    'v|vbr-quant=i' => \$VBR_QUANT,
 );
 die "Type '$TYPE' is not supported\n"
     unless exists TYPE_TO_CLASS->{$TYPE};
@@ -289,6 +293,13 @@ sub get_start_stop_callbacks
         fakesink   => 'only_a_cat_of_a_different_coat');
 
     say "Setting element params";
+    if( $src_name eq 'rpicamsrc' ) {
+        $src->set(
+            bitrate => $BITRATE,
+            'quantisation-parameter' => $VBR_QUANT,
+        );
+    }
+
     my $caps = GStreamer1::Caps::Simple->new( 'video/x-h264',
         alignment       => 'Glib::String' => 'au',
         'stream-format' => 'Glib::String' => 'byte-stream',
