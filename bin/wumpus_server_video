@@ -6,6 +6,7 @@ use GStreamer1;
 use Digest::Adler32::XS;
 use IO::Socket::INET ();
 use IO::Select ();
+use UAV::Pilot::Wumpus ();
 use Getopt::Long ();
 
 use constant {
@@ -18,7 +19,6 @@ use constant {
 };
 use constant HEARTBEAT_TIMEOUT_SEC       => 5;
 use constant HEARTBEAT_SEND_INTERVAL_SEC => 60;
-use constant LISTEN_PORT                 => 49001;
 use constant TYPE_TO_CLASS => {
     'rpi' => [
         'rpicamsrc',
@@ -31,7 +31,7 @@ use constant TYPE_TO_CLASS => {
 #my $INPUT_DEV        = '/dev/video0';
 my $WIDTH  = 800;
 my $HEIGHT = 600;
-my $PORT   = 49001;
+my $PORT   = UAV::Pilot::Wumpus->DEFAULT_VIDEO_PORT;
 my $TYPE   = 'rpi';
 my $FPS = 30;
 Getopt::Long::GetOptions(
@@ -178,7 +178,7 @@ sub setup_network_callbacks
             return 1;
         }
         else {
-            warn "No client connection\n";
+            #warn "No client connection\n";
             return 0;
         }
     };
@@ -278,6 +278,7 @@ sub get_start_stop_callbacks
 
     my ($src_name, @src_config) = @{ +TYPE_TO_CLASS->{$TYPE} };
 
+    say "Generating pipeline elements";
     my $pipeline = GStreamer1::Pipeline->new( 'pipeline' );
     my $src = GStreamer1::ElementFactory::make( $src_name => 'and_who_are_you' );
     my $h264 = GStreamer1::ElementFactory::make(
@@ -287,6 +288,7 @@ sub get_start_stop_callbacks
     my $fakesink = GStreamer1::ElementFactory::make(
         fakesink   => 'only_a_cat_of_a_different_coat');
 
+    say "Setting element params";
     my $caps = GStreamer1::Caps::Simple->new( 'video/x-h264',
         alignment       => 'Glib::String' => 'au',
         'stream-format' => 'Glib::String' => 'byte-stream',
@@ -298,6 +300,7 @@ sub get_start_stop_callbacks
 
     $src->set( @src_config ) if @src_config;
 
+    say "Getting callbacks";
     my ($start_callback, $stop_callback) = get_start_stop_callbacks(
         $pipeline, $loop );
     my ($print_callback, $check_client_callback,
@@ -320,6 +323,7 @@ sub get_start_stop_callbacks
         }),
     );
 
+    say "Linking elements";
     my @link = ($src, $h264, $capsfilter, $fakesink);
     $pipeline->add( $_ ) for @link;
     foreach my $i (0 .. $#link - 1) {
@@ -328,10 +332,12 @@ sub get_start_stop_callbacks
         $this->link( $next );
     }
 
+    say "Setting up pipeline bus";
     my $bus = $pipeline->get_bus;
     $bus->add_signal_watch;
     $bus->signal_connect( 'message::error', \&bus_error_callback, $loop );
     $bus->signal_connect( 'message::eos', \&bus_eos_callback, $loop );
 
+    say "Ready to serve on port $PORT . . . ";
     while(1) { $wait_for_next_client_callback->() }
 }
