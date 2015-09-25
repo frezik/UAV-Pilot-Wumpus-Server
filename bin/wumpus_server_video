@@ -36,6 +36,8 @@ my $TYPE   = 'rpi';
 my $FPS = 30;
 my $BITRATE = 0;
 my $VBR_QUANT = 15;
+my $KEYFRAME_INTERVAL = 1;
+my $SENSOR_MODE = undef;
 Getopt::Long::GetOptions(
     #'input=s'  => \$INPUT_DEV,
     'w|width=i'  => \$WIDTH,
@@ -45,6 +47,7 @@ Getopt::Long::GetOptions(
     'f|fps=i' => \$FPS,
     'b|bitrate=i' => \$BITRATE,
     'v|vbr-quant=i' => \$VBR_QUANT,
+    'k|keyframe-interval=i' => \$KEYFRAME_INTERVAL,
 );
 die "Type '$TYPE' is not supported\n"
     unless exists TYPE_TO_CLASS->{$TYPE};
@@ -296,7 +299,11 @@ sub get_start_stop_callbacks
     if( $src_name eq 'rpicamsrc' ) {
         $src->set(
             bitrate => $BITRATE,
-            'quantisation-parameter' => $VBR_QUANT,
+            'keyframe-interval' => $KEYFRAME_INTERVAL,
+            ($BITRATE == 0
+                ? ('quantisation-parameter' => $VBR_QUANT) : ()),
+            (defined $SENSOR_MODE
+                ? ('sensor-mode' => $SENSOR_MODE) : ()),
         );
     }
 
