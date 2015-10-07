@@ -1,4 +1,4 @@
-use Test::More tests => 20;
+use Test::More tests => 21;
 use strict;
 use warnings;
 use UAV::Pilot::Wumpus::PacketFactory;
@@ -8,6 +8,7 @@ use UAV::Pilot::Wumpus::Server::Mock;
 use Test::Moose;
 
 
+my $packet_count = 0;
 my $backend = UAV::Pilot::Wumpus::Server::Backend::Mock->new;
 my $server = UAV::Pilot::Wumpus::Server::Mock->new({
     listen_port => 65534,
@@ -27,6 +28,7 @@ my $too_soon = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
 $too_soon->ch1_out( 50 );
 $too_soon->ch2_out( 100 );
 $too_soon->make_checksum_clean;
+$too_soon->set_packet_count( $packet_count++ );
 $server->process_packet( $too_soon );
 
 my $undef_packet = $server->last_packet_out;
@@ -34,6 +36,7 @@ ok(! defined $undef_packet, "No Ack packet, because we didn't start yet" );
 
 my $startup_request = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
     'StartupRequest' );
+$startup_request->set_packet_count( $packet_count++ );
 $startup_request->make_checksum_clean;
 $server->process_packet( $startup_request );
 
@@ -48,6 +51,7 @@ my $radio_min_max = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
     'RadioMinMax' );
 $radio_min_max->ch1_max( 100 );
 $radio_min_max->ch2_max( 180 );
+$radio_min_max->set_packet_count( $packet_count++ );
 $radio_min_max->make_checksum_clean;
 $server->process_packet( $radio_min_max );
 my $min_max_ack = $server->last_packet_out;
@@ -61,6 +65,7 @@ my $radio_out = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
     'RadioOutputs' );
 $radio_out->ch1_out( 0 );
 $radio_out->ch2_out( 0 );
+$radio_out->set_packet_count( $packet_count++ );
 $radio_out->make_checksum_clean;
 $server->process_packet( $radio_out );
 my $out_ack = $server->last_packet_out;
@@ -73,6 +78,7 @@ $radio_out = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
     'RadioOutputs' );
 $radio_out->ch1_out( 100 );
 $radio_out->ch2_out( 90 );
+$radio_out->set_packet_count( $packet_count++ );
 $radio_out->make_checksum_clean;
 $server->process_packet( $radio_out );
 $out_ack = $server->last_packet_out;
@@ -85,6 +91,7 @@ $radio_out = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
     'RadioOutputs' );
 $radio_out->ch1_out( 50 );
 $radio_out->ch2_out( 180 );
+$radio_out->set_packet_count( $packet_count++ );
 $radio_out->make_checksum_clean;
 $server->process_packet( $radio_out );
 $out_ack = $server->last_packet_out;
@@ -92,3 +99,12 @@ cmp_ok( $out_ack->checksum_received, '==', $radio_out->checksum,
     "Radio Out packet ACK" );
 cmp_ok( $backend->ch1_out, '==',  50, "Channel1 out set on backend" );
 cmp_ok( $backend->ch2_out, '==', 100, "Channel2 out set on backend" );
+
+$radio_out = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
+    'RadioOutputs' );
+$radio_out->ch1_out( 55 );
+$radio_out->set_packet_count( $packet_count - 1);
+$radio_out->make_checksum_clean;
+$server->process_packet( $radio_out );
+$out_ack = $server->last_packet_out;
+cmp_ok( $backend->ch1_out, '==',  50, "Did not process packet with count too low" );

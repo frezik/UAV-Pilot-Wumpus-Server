@@ -39,7 +39,6 @@ has 'started' => (
 sub process_packet
 {
     my ($self, $packet, $server) = @_;
-
     my $packet_class = ref $packet;
     my ($short_class) = $packet_class =~ /:: (\w+) \z/x;
 

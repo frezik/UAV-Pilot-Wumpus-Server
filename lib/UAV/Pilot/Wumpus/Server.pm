@@ -123,6 +123,12 @@ has 'ch8_min' => (
     default => -100,
     writer  => '_set_ch8_min',
 );
+has '_largest_packet_count' => (
+    is => 'rw',
+    isa => 'Int',
+    default => -1,
+);
+
 
 with 'UAV::Pilot::Server';
 with 'UAV::Pilot::Logger';
@@ -147,8 +153,16 @@ sub start_listen_loop
 sub process_packet
 {
     my ($self, $packet) = @_;
-    my $backend = $self->backend;
 
+    if( $packet->packet_count <= $self->_largest_packet_count ) {
+        $self->_logger->warn( "Got packet with count " . $packet->packet_count
+            . ", but seen packet with count " . $self->_largest_packet_count
+            . ", ignoring" );
+        return 0;
+    }
+    $self->_largest_packet_count( $packet->packet_count );
+
+    my $backend = $self->backend;
     my $process = sub {
         if( $backend->process_packet($packet, $self) ) {
             my $ack = $self->_build_ack_packet( $packet );
