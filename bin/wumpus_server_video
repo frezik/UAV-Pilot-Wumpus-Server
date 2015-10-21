@@ -19,8 +19,7 @@ use constant {
     FLAG_KEYFRAME => 1,
     FLAG_FRAME_COUNT_OVERFLOW => 2,
 };
-use constant HEARTBEAT_TIMEOUT_SEC       => 5;
-use constant HEARTBEAT_SEND_INTERVAL_SEC => 60;
+use constant HEARTBEAT_TIMEOUT_SEC       => 60;
 use constant TYPE_TO_CLASS => {
     'rpi' => [
         'rpicamsrc',
@@ -79,8 +78,6 @@ sub get_catch_handoff_callback
     my $check_client_callback = $args->{check_client_callback};
     my $wait_for_next_client_callback
         = $args->{wait_for_next_client_callback};
-    my $add_to_pending_heartbeats_callback =
-        $args->{add_to_pending_heartbeats_callback};
     my $start_callback = $args->{start_callback};
     my $stop_callback = $args->{stop_callback};
     my $digest = Digest::Adler32::XS->new;
@@ -94,14 +91,14 @@ sub get_catch_handoff_callback
         my $data = pack "C*", @$frame_data;
 
         my $overflow_flag = 0;
-        if( $count > (2**32 - 1) ) {
+        if( $called > (2**32 - 1) ) {
             $overflow_flag = 1;
-            $count = 0;
+            $called = 0;
         }
 
         # TODO find if this frame is actually a keyframe based on the 
         # GStreamer objects
-        my $is_keyframe = $KEYFRAME_INTREVAL == 1 ? 1 : 0;
+        my $is_keyframe = $KEYFRAME_INTERVAL == 1 ? 1 : 0;
 
         $digest->add( $data );
         my $checksum = $digest->hexdigest;
@@ -117,7 +114,6 @@ sub get_catch_handoff_callback
             output_video_frame( $data, $frame_size, $checksum,
                 $WIDTH, $HEIGHT,
                 $print_callback, $check_client_callback,
-                $add_to_pending_heartbeats_callback,
                 $called, $overflow_flag, $is_keyframe );
         }
 
@@ -132,16 +128,10 @@ sub output_video_frame
 {
     my ($frame_data, $frame_size, $checksum_hex, $width, $height,
         $print_callback, $check_client_callback,
-        $add_to_pending_heartbeats_callback,
         $frame_count, $overflow_flag,
         $is_keyframe) = @_;
     my $flags = 0x00000000;
 
-    my $set_heartbeat_flag = $check_client_callback->();
-    if( $set_heartbeat_flag ) {
-        $add_to_pending_heartbeats_callback->( $checksum_hex );
-        $flags |= 1 << FLAG_HEARTBEAT;
-    }
     if( $is_keyframe ) {
         $flags |= 1 << FLAG_KEYFRAME;
     }
@@ -151,7 +141,7 @@ sub output_video_frame
 
 
     warn "Constructing output headers\n";
-    my $out_headers = pack 'nnnNNnnnnC*'
+    my $out = pack 'nnnNNnnnnC*'
         ,VIDEO_MAGIC_NUMBER
         ,VIDEO_VERSION
         ,VIDEO_ENCODING
@@ -161,13 +151,12 @@ sub output_video_frame
         ,$height
         ,unpack( 'C*', hex($checksum_hex) )
         ,$frame_count
-        ,( (0x00) x 10 ) # 10 bytes reserved
+        ,( (0x00) x 6 ) # 6 bytes reserved
+        , unpack( 'C*', $frame_data );
         ;
 
-    warn "Printing headers\n";
-    $print_callback->( $out_headers );
-    warn "Print frame data\n";
-    $print_callback->( $frame_data );
+    warn "Printing data\n";
+    $print_callback->( $out );
     return 1;
 }
 
@@ -178,20 +167,31 @@ sub setup_network_callbacks
     my $socket = IO::Socket::INET->new(
         LocalPort => $port,
         Proto     => 'udp',
-        Listen    => 1,
-        Reuse     => 1,
+        ReuseAddr => 1,
         Blocking  => 0,
     ) or die "Could not start socket on port $port: $!\n";
     IO::Handle::blocking( $socket, 0 );
 
     my $client              = undef;
-    my $last_heartbeat_send = undef;
-    my %pending_heartbeats  = ();
+    my $last_heartbeat_read = undef;
 
     my $print_callback = sub {
         my ($data) = @_;
         return 1 if ! defined $client;
-        $socket->send( $data );
+
+        eval {
+            warn "Sending data\n";
+            $client->print( $data );
+        };
+        if( $@ ) {
+            warn "Error sending data: $@\n";
+            warn "Dropping client\n";
+            $client->close;
+            undef $client;
+            undef $last_heartbeat_read;
+            $stop_callback->();
+        }
+
         return 1;
     };
     my $wait_for_next_client_callback = sub {
@@ -199,12 +199,21 @@ sub setup_network_callbacks
         $stop_callback->();
         my $msg;
         if( my $got_client = $socket->recv( $msg, 1024 ) ) {
-            warn "Got new client connection\n";
+            my $addr = $socket->peerhost;
+            my $port = $socket->peerport;
+            warn "Got new client connection at $addr:$port\n";
 
-            my ($port, $ipaddr) = sockaddr_in( $socket->peername );
-            $client = gethostbyaddr( $ipaddr, AF_INET );
+            $client = IO::Socket::INET->new(
+                PeerAddr => $addr,
+                PeerPort => $port,
+                Proto    => 'udp',
+                ReuseAddr => 1,
+                Blocking => 0,
+            ) or die "Could not start socket: $!\n";
+            IO::Handle::blocking( $client, 0 );
 
-            $last_heartbeat_send = time;
+            $client->autoflush( 1 );
+            $last_heartbeat_read = time;
             $start_callback->();
             return 1;
         }
@@ -216,52 +225,39 @@ sub setup_network_callbacks
     my $check_client_callback = sub {
         warn "Checking client\n";
         if( defined $client) {
-            read_heartbeat( $socket, \%pending_heartbeats );
-            if( is_heartbeat_expired( \%pending_heartbeats ) ) {
-                undef $client;
-                undef $last_heartbeat_send;
-                return 0;
+            if( read_heartbeat( $client ) ) {
+                $last_heartbeat_read = time();
             }
-
-            my $time = time;
-            if( (HEARTBEAT_SEND_INTERVAL_SEC + $time) <= $last_heartbeat_send ){
-                warn "Sending heartbeat at $time\n";
-                return 1;
+            if( HEARTBEAT_TIMEOUT_SEC <= time() - $last_heartbeat_read ) {
+                $client->close;
+                undef $client;
+                undef $last_heartbeat_read;
+                return 0;
             }
         }
 
-        return 0;
-    };
-    my $add_to_heartbeat_list_callback = sub {
-        my ($digest) = @_;
-        $last_heartbeat_send = time;
-        $pending_heartbeats{$digest}
-            = $last_heartbeat_send + HEARTBEAT_TIMEOUT_SEC;
-        warn "Setting heartbeat with digest [$digest] at $last_heartbeat_send, expries at $pending_heartbeats{$digest}\n";
         return 1;
     };
 
-    return ($print_callback, $check_client_callback,
-        $add_to_heartbeat_list_callback, $wait_for_next_client_callback);
+    return ($print_callback, $check_client_callback, $wait_for_next_client_callback);
 }
 
 sub read_heartbeat
 {
-    my ($socket, $pending_heartbeat) = @_;
+    my ($socket) = @_;
     warn "Reading for heartbeat\n";
     my $buf;
-    # TODO nonblocking read
-    if( $client->recv( \$buf, 512 ) ) {
+    if( $socket->recv( \$buf, 16 ) ) {
         my ($magic_number, $digest) = unpack 'nN', $buf;
         if( VIDEO_MAGIC_NUMBER == $magic_number ) {
             warn "Got heartbeat from client\n";
-            delete $pending_heartbeat->{$digest};
+            return 1;
         }
         else {
             warn "Got message from client with bad magic number\n";
         }
     }
-    return 1;
+    return 0;
 }
 
 sub is_heartbeat_expired
@@ -345,7 +341,6 @@ sub get_start_stop_callbacks
     my ($start_callback, $stop_callback) = get_start_stop_callbacks(
         $pipeline, $loop );
     my ($print_callback, $check_client_callback,
-        $add_to_pending_heartbeats_callback,
         $wait_for_next_client_callback) = setup_network_callbacks(
             $PORT, $start_callback, $stop_callback );
     $fakesink->set(
@@ -357,8 +352,6 @@ sub get_start_stop_callbacks
             check_client_callback => $check_client_callback,
             wait_for_next_client_callback
                 => $wait_for_next_client_callback,
-            add_to_pending_heartbeats_callback =>
-                $add_to_pending_heartbeats_callback,
             start_callback => $start_callback,
             stop_callback => $stop_callback,
         }),

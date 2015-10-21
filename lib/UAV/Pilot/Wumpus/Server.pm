@@ -9,9 +9,9 @@ use Time::HiRes ();
 use Errno qw(:POSIX);
 
 use constant BUF_LENGTH => 1024;
-use constant SLEEP_LOOP_US => 1_000_000 / 100; # In microseconds
+use constant SLEEP_LOOP_US => 1_000_000 / 1000; # In microseconds
 
-our $VERSION = 0.3;
+our $VERSION = 0.4;
 
 
 has 'listen_port' => (
@@ -123,7 +123,7 @@ has 'ch8_min' => (
     default => -100,
     writer  => '_set_ch8_min',
 );
-has '_largest_packet_count' => (
+has 'max_seen_packet_count' => (
     is => 'rw',
     isa => 'Int',
     default => -1,
@@ -153,14 +153,6 @@ sub start_listen_loop
 sub process_packet
 {
     my ($self, $packet) = @_;
-
-    if( $packet->packet_count <= $self->_largest_packet_count ) {
-        $self->_logger->warn( "Got packet with count " . $packet->packet_count
-            . ", but seen packet with count " . $self->_largest_packet_count
-            . ", ignoring" );
-        return 0;
-    }
-    $self->_largest_packet_count( $packet->packet_count );
 
     my $backend = $self->backend;
     my $process = sub {
@@ -199,42 +191,30 @@ sub _read_packet
     if( defined($len) && ($len > 0) ) {
         my $len = length $buf;
         $logger->info( "Read $len bytes" );
-        my $packet = eval {
+        eval {
             my $packet = UAV::Pilot::Wumpus::PacketFactory
                 ->read_packet( $buf );
-            $logger->info( 'Processing message ID: '
-                . $packet->message_id . ' (type: ' . ref($packet) . ')' );
-            $self->process_packet( $packet );
+
+            if( $packet->packet_count > $self->max_seen_packet_count ) {
+                $logger->info( 'Processing message ID: '
+                    . $packet->message_id . ' (type: ' . ref($packet) . ')' );
+                $self->max_seen_packet_count( $packet->packet_count );
+                $self->process_packet( $packet );
+            }
+            else { 
+                $self->_logger->warn( "Got packet with count "
+                    . $packet->packet_count . " but already seen packet with count "
+                    . $self->max_seen_packet_count . "; dropping packet" );
+            }
         };
-        if( ref($@) ) {
-            if( $@->isa( 'UAV::Pilot::ArdupilotPacketException::Badheader' ) ) {
-                $self->_logger->warn(
-                    'Bad header in packet: [' . $@->got_header . ']' );
-            }
-            elsif( $@->isa(
-                'UAV::Pilot::ArdupilotPacketException::BadChecksum'
-            )) {
-                $self->_logger->warn( 'Bad checksum in packet' );
-                $self->_logger->warn( 'Expected checksum: '
-                    . $@->expected_checksum1 . ', ' . $@->expected_checksum2 );
-                $self->_logger->warn( 'Got checksum: '
-                    . $@->got_checksum1 . ', ' . $@->got_checksum2 );
-            }
-            else {
-                my $is_ref = ref $@;
-                $self->_logger->warn( 'Got exception while processing packet: '
-                    . $is_ref ? $is_ref : $@ );
-                $@->rethrow if $is_ref;
-            }
-        }
-        elsif( $@ ) {
-            die "Error processing packet: $@\n";
+        if( $@ ) {
+            $self->_logger->warn( ref($@) . ": $@" );
         }
     }
     elsif(! defined $len) {
         # Possible error
         if($!{EAGAIN} || $!{EWOULDBLOCK}) {
-            $logger->info( 'No data to read' );
+            $logger->info( 'No data to read available' );
         }
         else {
             UAV::Pilot::IOException->throw({
