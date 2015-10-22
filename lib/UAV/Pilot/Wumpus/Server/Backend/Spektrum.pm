@@ -178,15 +178,16 @@ sub _packet_radio_trims
 sub _packet_radio_out
 {
     my ($self, $packet, $server) = @_;
-    $self->_logger->info( 'Got packet: ' . ref($packet) );
+    $self->_logger->info( 'Got radio out packet: ' . ref($packet) );
 
     my %ch_name_map = %{ $self->ch_name_map };
     foreach my $ch_name (keys %ch_name_map ) {
-        my $ch_num = $self->ch_name;
+        my $ch_num = $ch_name_map{$ch_name};
         my $map_ch_call = '_map_ch' . $ch_num . '_value';
         my $ch_call = 'ch' . $ch_num . '_out';
 
         my $ch_value = $self->$map_ch_call( $server, $packet->$ch_call );
+        $ch_value = sprintf '%.0f', $ch_value; # Round off
         $self->$ch_name( $ch_value );
     }
 
@@ -234,7 +235,10 @@ sub _do_send_packet
     my ($self) = @_;
     my $elapsed = Time::HiRes::tv_interval( $self->_last_packet_sent_time, 
         [ Time::HiRes::gettimeofday ]);
-    return $elapsed >= SEC_BETWEEN_PACKETS ? 1 : 0;
+    
+    $self->_logger->info( "Elapsed sec: $elapsed" );
+    $self->_logger->info( "Send time: " . $self->SEC_BETWEEN_PACKETS );
+    return $elapsed >= $self->SEC_BETWEEN_PACKETS ? 1 : 0;
 }
 
 
