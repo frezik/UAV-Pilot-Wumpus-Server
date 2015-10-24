@@ -17,10 +17,12 @@ has 'ch_name_map' => (
     is => 'ro',
     isa => 'HashRef[Str]',
     default => sub {{
-        throttle => 1,
-        aileron => 2,
-        elevator => 3,
-        rudder => 4,
+        # These need to match up with channel_order() in
+        # UAV::Pilot::Wumpus::Control
+        throttle => 4,
+        aileron => 1,
+        elevator => 2,
+        rudder => 3,
         gear => 5,
         aux1 => 6,
         aux2 => 7,
