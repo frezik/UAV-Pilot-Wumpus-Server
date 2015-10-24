@@ -8,8 +8,6 @@ use Device::Spektrum::Packet;
 use Device::SerialPort;
 use Time::HiRes;
 
-use constant SEC_BETWEEN_PACKETS => 22 / 1000; # 22 milliseconds
-
 
 has '_serial' => (
     is => 'ro',
@@ -191,19 +189,17 @@ sub _packet_radio_out
         $self->$ch_name( $ch_value );
     }
 
-    if( $self->_do_send_packet ) {
-        my $packet = Device::Spektrum::Packet->new({
-            throttle => $self->throttle,
-            aileron => $self->aileron,
-            elevator => $self->elevator,
-            rudder => $self->rudder,
-            gear => $self->gear,
-            aux1 => $self->aux1,
-            aux2 => $self->aux2,
-        });
-        $self->_serial->write( $packet->encode_packet );
-        $self->_reset_last_packet_sent_time;
-    }
+    my $packet = Device::Spektrum::Packet->new({
+        throttle => $self->throttle,
+        aileron => $self->aileron,
+        elevator => $self->elevator,
+        rudder => $self->rudder,
+        gear => $self->gear,
+        aux1 => $self->aux1,
+        aux2 => $self->aux2,
+    });
+    $self->_serial->write( $packet->encode_packet );
+    $self->_reset_last_packet_sent_time;
 
     return 1;
 }
@@ -228,17 +224,6 @@ sub _reset_last_packet_sent_time
     my ($self) = @_;
     $self->_last_packet_sent_time([ Time::HiRes::gettimeofday ]);
     return 1;
-}
-
-sub _do_send_packet
-{
-    my ($self) = @_;
-    my $elapsed = Time::HiRes::tv_interval( $self->_last_packet_sent_time, 
-        [ Time::HiRes::gettimeofday ]);
-    
-    $self->_logger->info( "Elapsed sec: $elapsed" );
-    $self->_logger->info( "Send time: " . $self->SEC_BETWEEN_PACKETS );
-    return $elapsed >= $self->SEC_BETWEEN_PACKETS ? 1 : 0;
 }
 
 
