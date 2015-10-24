@@ -270,9 +270,8 @@ sub _map_value
 {
     my ($self, $in_min, $in_max, $out_min, $out_max, $input) = @_;
     return 0 if $in_max - $in_min == 0; # Avoid divide-by-zero error
-    my $output = ($input - $in_min) / ($in_max - $in_min)
-        * ($out_max - $out_min) + $out_min;
-
+    my $output = $out_min + ($out_max - $out_min)
+        * ($input - $in_min) / ($in_max - $in_min);
     return $output;
 }
 

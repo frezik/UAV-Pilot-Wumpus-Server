@@ -191,7 +191,7 @@ sub _packet_radio_out
         $self->$ch_name( $ch_value );
     }
 
-    my $packet = Device::Spektrum::Packet->new({
+    my $spektrum_packet = Device::Spektrum::Packet->new({
         throttle => $self->throttle,
         aileron => $self->aileron,
         elevator => $self->elevator,
@@ -200,7 +200,7 @@ sub _packet_radio_out
         aux1 => $self->aux1,
         aux2 => $self->aux2,
     });
-    $self->_serial->write( $packet->encode_packet );
+    $self->_serial->write( $spektrum_packet->encode_packet );
     $self->_reset_last_packet_sent_time;
 
     return 1;
