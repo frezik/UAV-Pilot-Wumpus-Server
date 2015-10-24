@@ -8,6 +8,11 @@ use Device::Spektrum::Packet;
 use Device::SerialPort;
 use Time::HiRes;
 
+# If true, we don't bother waiting for time to pass in between packets
+use constant ALWAYS_SEND_PACKET => 1;
+# If we do wait between packets, this is the time to wait
+use constant SEC_BETWEEN_PACKETS => 22 / 1000; # 22 milliseconds
+
 
 has '_serial' => (
     is => 'ro',
@@ -178,7 +183,8 @@ sub _packet_radio_trims
 sub _packet_radio_out
 {
     my ($self, $packet, $server) = @_;
-    $self->_logger->info( 'Got radio out packet: ' . ref($packet) );
+    my $logger = $self->_logger;
+    $logger->info( 'Got radio out packet: ' . ref($packet) );
 
     my %ch_name_map = %{ $self->ch_name_map };
     foreach my $ch_name (keys %ch_name_map ) {
@@ -186,22 +192,27 @@ sub _packet_radio_out
         my $map_ch_call = '_map_ch' . $ch_num . '_value';
         my $ch_call = 'ch' . $ch_num . '_out';
 
-        my $ch_value = $self->$map_ch_call( $server, $packet->$ch_call );
+        my $in_value = $packet->$ch_call;
+        my $ch_value = $self->$map_ch_call( $server, $in_value );
         $ch_value = sprintf '%.0f', $ch_value; # Round off
         $self->$ch_name( $ch_value );
+
+        #$logger->warn( "Channel $ch_num, input ($in_value), mapped output ($ch_value)" );
     }
 
-    my $spektrum_packet = Device::Spektrum::Packet->new({
-        throttle => $self->throttle,
-        aileron => $self->aileron,
-        elevator => $self->elevator,
-        rudder => $self->rudder,
-        gear => $self->gear,
-        aux1 => $self->aux1,
-        aux2 => $self->aux2,
-    });
-    $self->_serial->write( $spektrum_packet->encode_packet );
-    $self->_reset_last_packet_sent_time;
+    if( ALWAYS_SEND_PACKET || $self->_do_send_packet ) {
+        my $spektrum_packet = Device::Spektrum::Packet->new({
+            throttle => $self->throttle,
+            aileron => $self->aileron,
+            elevator => $self->elevator,
+            rudder => $self->rudder,
+            gear => $self->gear,
+            aux1 => $self->aux1,
+            aux2 => $self->aux2,
+        });
+        $self->_serial->write( $spektrum_packet->encode_packet );
+        $self->_reset_last_packet_sent_time;
+    }
 
     return 1;
 }
@@ -226,6 +237,17 @@ sub _reset_last_packet_sent_time
     my ($self) = @_;
     $self->_last_packet_sent_time([ Time::HiRes::gettimeofday ]);
     return 1;
+}
+
+sub _do_send_packet
+{
+    my ($self) = @_;
+    my $elapsed = Time::HiRes::tv_interval( $self->_last_packet_sent_time, 
+        [ Time::HiRes::gettimeofday ]);
+    
+    $self->_logger->info( "Elapsed sec: $elapsed" );
+    $self->_logger->info( "Send time: " . $self->SEC_BETWEEN_PACKETS );
+    return $elapsed >= $self->SEC_BETWEEN_PACKETS ? 1 : 0;
 }
 
 

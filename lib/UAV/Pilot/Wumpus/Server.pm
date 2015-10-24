@@ -30,97 +30,97 @@ has '_socket' => (
 has 'ch1_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch1_max',
 );
 has 'ch1_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch1_min',
 );
 has 'ch2_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 90,
+    default => 2**16 - 1,
     writer  => '_set_ch2_max',
 );
 has 'ch2_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -90,
+    default => -1,
     writer  => '_set_ch2_min',
 );
 has 'ch3_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch3_max',
 );
 has 'ch3_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch3_min',
 );
 has 'ch4_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch4_max',
 );
 has 'ch4_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch4_min',
 );
 has 'ch5_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch5_max',
 );
 has 'ch5_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch5_min',
 );
 has 'ch6_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch6_max',
 );
 has 'ch6_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch6_min',
 );
 has 'ch7_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch7_max',
 );
 has 'ch7_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch7_min',
 );
 has 'ch8_max' => (
     is      => 'ro',
     isa     => 'Int',
-    default => 100,
+    default => 2**16 - 1,
     writer  => '_set_ch8_max',
 );
 has 'ch8_min' => (
     is      => 'ro',
     isa     => 'Int',
-    default => -100,
+    default => -1,
     writer  => '_set_ch8_min',
 );
 has 'max_seen_packet_count' => (
