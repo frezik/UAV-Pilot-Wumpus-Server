@@ -1,4 +1,4 @@
-use Test::More tests => 21;
+use Test::More tests => 22;
 use strict;
 use warnings;
 use UAV::Pilot::Wumpus::PacketFactory;
@@ -108,3 +108,11 @@ $radio_out->make_checksum_clean;
 $server->process_packet( $radio_out );
 $out_ack = $server->last_packet_out;
 cmp_ok( $backend->ch1_out, '==',  50, "Did not process packet with count too low" );
+
+my $startup_request2 = UAV::Pilot::Wumpus::PacketFactory->fresh_packet(
+    'StartupRequest' );
+$startup_request2->set_packet_count( 1 );
+$startup_request2->make_checksum_clean;
+$server->process_packet( $startup_request2 );
+cmp_ok( $server->max_seen_packet_count, '==', 1,
+    "StartupRequest packet reset packet count" );

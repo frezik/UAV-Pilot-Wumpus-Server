@@ -153,6 +153,7 @@ sub start_listen_loop
 sub process_packet
 {
     my ($self, $packet) = @_;
+    my $logger = $self->_logger;
 
     my $backend = $self->backend;
     my $process = sub {
@@ -166,6 +167,7 @@ sub process_packet
         if( $packet->isa(
             'UAV::Pilot::Wumpus::Packet::StartupRequest' )) {
             $process->();
+            $self->max_seen_packet_count( 1 );
         }
         else {
             $self->_logger->warn( 'Recieved packet of type "' . ref( $packet )
@@ -173,7 +175,18 @@ sub process_packet
         }
     }
     else {
-        $process->();
+        if( ($packet->packet_count > $self->max_seen_packet_count)
+            || $packet->isa( 'UAV::Pilot::Wumpus::Packet::StartupRequest' ) ) {
+            $logger->info( 'Processing message ID: '
+                . $packet->message_id . ' (type: ' . ref($packet) . ')' );
+            $process->();
+            $self->max_seen_packet_count( $packet->packet_count );
+        }
+        else {
+            $self->_logger->warn( "Got packet with count "
+                . $packet->packet_count . " but already seen packet with count "
+                . $self->max_seen_packet_count . "; dropping packet" );
+        }
     }
 
     return 1;
@@ -194,18 +207,7 @@ sub _read_packet
         eval {
             my $packet = UAV::Pilot::Wumpus::PacketFactory
                 ->read_packet( $buf );
-
-            if( $packet->packet_count > $self->max_seen_packet_count ) {
-                $logger->info( 'Processing message ID: '
-                    . $packet->message_id . ' (type: ' . ref($packet) . ')' );
-                $self->max_seen_packet_count( $packet->packet_count );
-                $self->process_packet( $packet );
-            }
-            else { 
-                $self->_logger->warn( "Got packet with count "
-                    . $packet->packet_count . " but already seen packet with count "
-                    . $self->max_seen_packet_count . "; dropping packet" );
-            }
+            $self->process_packet( $packet );
         };
         if( $@ ) {
             $self->_logger->warn( ref($@) . ": $@" );
