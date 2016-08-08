@@ -23,6 +23,11 @@ has 'backend' => (
     is  => 'ro',
     isa => 'UAV::Pilot::Wumpus::Server::Backend',
 );
+has 'packet_callback' => (
+    is => 'ro',
+    isa => 'CodeRef',
+    default => sub { sub {} },
+);
 has '_socket' => (
     is  => 'rw',
     isa => 'Maybe[IO::Socket::INET]',
@@ -161,6 +166,9 @@ sub process_packet
             my $ack = $self->_build_ack_packet( $packet );
             $self->_send_packet( $ack );           
         }
+
+        $self->packet_callback->( $self, $packet );
+        return;
     };
 
     if(! $backend->started) {
@@ -293,6 +301,10 @@ __END__
     my $backend = UAV::Pilot::Wumpus::Server::Backend::RaspberryPiI2C->new;
     my $server = UAV::Pilot::Wumpus::Server->new({
         backend => $backend,
+        packet_callback => sub {
+            my ($server, $packet) = @_;
+            ...
+        },
     });
     $server->start_listen_loop;
 
@@ -300,6 +312,25 @@ __END__
 
 A server for running the Wumpus.  Listens on specified UDP port, 
 defaulting to C<<UAV::Pilot::Wumpus->DEFAULT_PORT>>.
+
+=head1 ATTRIBUTES
+
+=head2 packet_callback
+
+  new({
+      ...
+      packet_callback => sub {
+          my ($server, $packet) = @_;
+          ...
+      },
+  });
+
+An optional callback function that will get every packet from the first 
+StartupRequest onward.  This will be called after the Backend has processed 
+the packet.
+
+It is passed the C<UAV::Pilot::Wumpus::Server> object and the packet. The 
+return value is ignored.
 
 =head1 METHODS
 
